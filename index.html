@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Random Alarm</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="app-container">
+
+  <!-- SETUP SCREEN -->
+  <div id="setup-screen" class="card main-card">
+    <h1>Random Alarm</h1>
+
+    <label>
+      Duration (minutes)
+      <input id="duration" type="number" min="2" value="10">
+    </label>
+
+    <label>
+      Number of alarms
+      <input id="alarmCount" type="number" min="1" value="3">
+    </label>
+
+    <button id="startBtn" class="btn neon-btn">START</button>
+
+    <p class="hint">
+      Minimum gap between alarms is 1 minute.<br>
+      Last alarm happens at least 1 minute before the timer ends.
+    </p>
+  </div>
+
+  <!-- TIMER SCREEN -->
+  <div id="timer-screen" class="card main-card hidden">
+
+    <div class="timer-display" id="countdown">00:00</div>
+
+    <div class="alarms-left" id="alarmsLeft">Alarms left: 0</div>
+
+    <!-- MINI PLAYER INSIDE PANEL -->
+    <div id="miniPlayer" class="mini-player hidden">
+      <span class="pulse"></span>
+      <span id="miniPlayerLabel">Alarm ringing…</span>
+      <button id="stopSoundBtn" class="icon-btn">✔</button>
+    </div>
+
+    <!-- FIRED ALARMS -->
+    <h3 class="fired-header">Triggered Alarms</h3>
+    <div id="firedList" class="fired-list"></div>
+
+    <button id="stopTimerBtn" class="btn neon-btn stop">STOP</button>
+
+  </div>
+</div>
+
+<script src="audio.js"></script>
+<script src="logic.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

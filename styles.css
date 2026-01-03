@@ -1,0 +1,186 @@
+:root {
+  --bg: #0c0c0f;
+  --panel: #11131a;
+  --pink: #ff2fa6;
+  --pink-soft: #ff6fc8;
+  --text-light: #f2f2f7;
+  --dark-text: #1a1a1a;
+}
+
+body {
+  background: radial-gradient(circle at 50% 20%, #111 0%, #000 60%);
+  color: var(--text-light);
+  font-family: system-ui, -apple-system, Segoe UI, Roboto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  min-height: 100vh;
+}
+
+.app-container {
+  max-width: 480px;
+  width: 100%;
+}
+
+/* MAIN CARD WITH NEON PULSE */
+.main-card {
+  background: var(--panel);
+  border-radius: 18px;
+  padding: 20px;
+  border: 2px solid var(--pink);
+  box-shadow: 0 0 15px rgba(255,47,166,0.2);
+  animation: neonPulse 4s ease-in-out infinite;
+}
+
+@keyframes neonPulse {
+  0%,100% { box-shadow: 0 0 12px rgba(255,47,166,0.25); }
+  50% { box-shadow: 0 0 20px rgba(255,47,166,0.4); }
+}
+
+h1 {
+  text-align: center;
+  color: var(--pink);
+  margin-bottom: 12px;
+}
+
+label {
+  display: block;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+input {
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  border: none;
+  background: #1a1d27;
+  color: white;
+  margin-top: 6px;
+  box-sizing: border-box; /* предотвратить вылазание за рамку */
+}
+
+.btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  border: none;
+  font-size: 16px;
+  margin-top: 14px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: transform .2s, background-color .2s, color .2s;
+}
+
+/* START and STOP buttons animation - no neon glow */
+.btn.start {
+  background-color: var(--pink);
+  color: var(--dark-text);
+}
+
+.btn.start:hover {
+  transform: scale(1.05);
+}
+
+.btn.stop {
+  background-color: #ff5f5f;
+  color: var(--dark-text);
+}
+
+.btn.stop:hover {
+  transform: scale(1.05);
+}
+
+/* Timer and alarms text */
+.timer-display {
+  font-size: clamp(50px, 12vw, 70px);
+  text-align: center;
+  margin: 12px 0;
+  color: var(--text-light);
+  letter-spacing: 2px;
+}
+
+.alarms-left {
+  text-align: center;
+  color: var(--pink);
+  font-size: 16px;
+  margin-bottom: 12px;
+  font-weight: bold; /* bold font for "Alarms left:" */
+}
+
+/* MINI PLAYER */
+.mini-player {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #151726;
+  border-radius: 14px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255,47,166,0.3);
+  margin-bottom: 12px;
+}
+
+.pulse {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--pink);
+  animation: pulseAnim 1.2s infinite;
+}
+
+@keyframes pulseAnim {
+  0%, 100% { transform: scale(.9); opacity:.7; }
+  50% { transform: scale(1.4); opacity:1; }
+}
+
+/* MINI PLAYER button with pink bg and dark check */
+.icon-btn {
+  background-color: var(--pink);
+  color: var(--dark-text);
+  font-weight: bold;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  transition: transform .2s, background-color .2s;
+}
+
+.icon-btn:hover {
+  transform: scale(1.1);
+  background-color: var(--pink-soft);
+}
+
+/* Triggered alarms */
+.fired-header {
+  color: white; /* white header */
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.fired-list {
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.hidden {
+  display: none;
+}
+
+.hint {
+  font-size: 12px;
+  opacity: .7;
+  margin-top: 10px;
+  text-align: center;
+}
+
+/* Responsive */
+@media(max-width:480px){
+  .card {
+    padding: 16px;
+    border-radius: 14px;
+  }
+
+  .btn { font-size: 15px; }
+  .timer-display { font-size: clamp(45px,12vw,65px); }
+}
