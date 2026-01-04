@@ -4,16 +4,18 @@ const timerScreen = document.getElementById("timer-screen");
 const countdown = document.getElementById("countdown");
 const alarmsLeftEl = document.getElementById("alarmsLeft");
 const firedList = document.getElementById("firedList");
+const firedHeader = document.getElementById("firedHeader");
 
 const startBtn = document.getElementById("startBtn");
 const stopTimerBtn = document.getElementById("stopTimerBtn");
 
 const miniPlayer = document.getElementById("miniPlayer");
-const miniPlayerLabel = document.getElementById("miniPlayerLabel");
 const stopSoundBtn = document.getElementById("stopSoundBtn");
 
 const alarmAudio = new AlarmAudio();
+
 let alarmsLeft = 0;
+let firedCount = 0;
 
 const logic = new RandomAlarmLogic(
   (alarmNum) => handleAlarm(alarmNum),
@@ -33,7 +35,10 @@ function updateCountdown(ms){
 
 function handleAlarm(num){
   alarmsLeft--;
+  firedCount++;
+
   alarmsLeftEl.textContent = `Alarms left: ${alarmsLeft}`;
+  firedHeader.classList.remove("hidden");
 
   alarmAudio.play();
   miniPlayer.classList.remove("hidden");
@@ -44,6 +49,7 @@ function handleAlarm(num){
 
   const div = document.createElement("div");
   div.textContent = `Alarm ${num} - ${m} (${t})`;
+
   firedList.appendChild(div);
 }
 
@@ -58,7 +64,10 @@ startBtn.addEventListener("click", () => {
 
   try {
     alarmsLeft = count;
+    firedCount = 0;
     firedList.innerHTML = "";
+    firedHeader.classList.add("hidden");
+
     alarmsLeftEl.textContent = `Alarms left: ${alarmsLeft}`;
     miniPlayer.classList.add("hidden");
 
@@ -74,6 +83,7 @@ startBtn.addEventListener("click", () => {
 stopTimerBtn.addEventListener("click", () => reset());
 
 function finishTimer(){
+  alarmAudio.playOnce();   // 🔔 звук по истечению таймера
   reset();
 }
 
@@ -81,6 +91,7 @@ function reset(){
   logic.stop();
   alarmAudio.stop();
   miniPlayer.classList.add("hidden");
+
   setup.classList.remove("hidden");
   timerScreen.classList.add("hidden");
 }
