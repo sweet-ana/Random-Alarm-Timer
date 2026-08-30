@@ -1,34 +1,52 @@
 (() => {
-  const $ = id => document.getElementById(id);
-  const durationInput = $('duration');
-  const countInput    = $('count');
-  const startBtn      = $('start');
-  const pauseBtn      = $('pause');
-  const resetBtn      = $('reset');
-  const timeLeftEl    = $('time-left');
-  const progressEl    = $('progress');
-  const statusEl      = $('status');
-  const errorEl       = $('error');
-  const modal         = $('modal');
-  const modalTitle    = $('modal-title');
-  const modalTime     = $('modal-time');
-  const modalConfirm  = $('modal-confirm');
-  const historyList   = $('history-list');
+  'use strict';
 
+  // ============================================
+  // CONFIG
+  // ============================================
   const MIN_INTERVAL_SEC = 60;
-  const EDGE_MARGIN_SEC  = 1;
+  const EDGE_MARGIN_SEC = 1;
 
-  let signals = [];
-  let totalDurationSec = 0;
-  let startTime = 0;
-  let accumulated = 0;
-  let running = false;
-  let paused = false;
-  let modalOpen = false;
-  let rafId = null;
-  let currentAudio = null;
-  let currentLang = 'ru';
+  // ============================================
+  // STATE
+  // ============================================
+  const state = {
+    signals: [],
+    totalDurationSec: 0,
+    startTime: 0,
+    accumulated: 0,
+    running: false,
+    paused: false,
+    modalOpen: false,
+    rafId: null,
+    currentAudio: null,
+    currentLang: 'ru'
+  };
 
+  // ============================================
+  // DOM REFS
+  // ============================================
+  const $ = id => document.getElementById(id);
+  const refs = {
+    durationInput: $('duration'),
+    countInput: $('count'),
+    startBtn: $('start'),
+    pauseBtn: $('pause'),
+    resetBtn: $('reset'),
+    timeLeftEl: $('time-left'),
+    progressEl: $('progress'),
+    statusEl: $('status'),
+    errorEl: $('error'),
+    modal: $('modal'),
+    modalTitle: $('modal-title'),
+    modalTime: $('modal-time'),
+    modalConfirm: $('modal-confirm'),
+    historyList: $('history-list')
+  };
+
+  // ============================================
+  // I18N
+  // ============================================
   const translations = {
     ru: {
       duration: 'Длительность (минуты)',
@@ -46,10 +64,10 @@
       'status-fired': 'Сработало:',
       'status-remaining': 'Осталось:',
       'status-paused': 'на паузе',
-      'status-finished': '✨ Таймер завершён',
+      'status-finished': 'Таймер завершён',
       'error-invalid-duration': 'Введите корректную длительность (положительное число).',
       'error-invalid-count': 'Введите корректное количество сигналов (целое число ≥ 1).',
-      'error-too-small': (count, minMin) => 
+      'error-too-small': (count, minMin) =>
         `Для ${count} сигналов нужно минимум ${minMin} мин (минимальный интервал — 1 мин).`
     },
     en: {
@@ -68,22 +86,22 @@
       'status-fired': 'Fired:',
       'status-remaining': 'Remaining:',
       'status-paused': 'paused',
-      'status-finished': '✨ Timer finished',
+      'status-finished': 'Timer finished',
       'error-invalid-duration': 'Please enter a valid duration (positive number).',
       'error-invalid-count': 'Please enter a valid alarm count (integer ≥ 1).',
-      'error-too-small': (count, minMin) => 
+      'error-too-small': (count, minMin) =>
         `At least ${minMin} min needed for ${count} alarms (minimum interval — 1 min).`
     }
   };
 
   function t(key) {
-    return translations[currentLang][key] || key;
+    return translations[state.currentLang][key] || key;
   }
 
   function applyLanguage(lang) {
-    currentLang = lang;
+    state.currentLang = lang;
     document.documentElement.lang = lang;
-    
+
     document.querySelectorAll('[data-i18n]').forEach(el => {
       const key = el.getAttribute('data-i18n');
       if (el.tagName === 'LABEL') {
@@ -99,21 +117,25 @@
       btn.classList.toggle('active', btn.dataset.lang === lang);
     });
 
-    const emptyHistory = historyList.querySelector('.empty-history');
+    const emptyHistory = refs.historyList.querySelector('.empty-history');
     if (emptyHistory) {
       emptyHistory.textContent = t('history-empty');
     }
 
-    if (!running && !paused) {
-      statusEl.textContent = t('status-default');
-    }
-    if (paused) {
-      pauseBtn.textContent = t('resume');
-    } else {
-      pauseBtn.textContent = t('pause');
+    // Исправление: если есть сигналы, показываем их статус, иначе дефолт
+    if (state.signals.length > 0) {
+      updateStatus();
+    } else if (!state.running && !state.paused) {
+      refs.statusEl.textContent = t('status-default');
     }
 
-    const items = historyList.querySelectorAll('.history-item');
+    if (state.paused) {
+      refs.pauseBtn.textContent = t('resume');
+    } else {
+      refs.pauseBtn.textContent = t('pause');
+    }
+
+    const items = refs.historyList.querySelectorAll('.history-item');
     items.forEach((item, idx) => {
       const numSpan = item.querySelector('.num');
       if (numSpan) {
@@ -122,10 +144,9 @@
     });
   }
 
-  document.querySelectorAll('.lang-option').forEach(btn => {
-    btn.addEventListener('click', () => applyLanguage(btn.dataset.lang));
-  });
-
+  // ============================================
+  // AUDIO
+  // ============================================
   function playBellOnce() {
     try {
       const a = new Audio('bell.mp3');
@@ -137,23 +158,61 @@
   function startBellLoop() {
     stopBellLoop();
     try {
-      currentAudio = new Audio('bell.mp3');
-      currentAudio.loop = true;
-      currentAudio.volume = 0.8;
-      currentAudio.play().catch(() => {});
+      state.currentAudio = new Audio('bell.mp3');
+      state.currentAudio.loop = true;
+      state.currentAudio.volume = 0.8;
+      state.currentAudio.play().catch(() => {});
     } catch (e) {}
   }
 
   function stopBellLoop() {
-    if (currentAudio) {
+    if (state.currentAudio) {
       try {
-        currentAudio.pause();
-        currentAudio.currentTime = 0;
+        state.currentAudio.pause();
+        state.currentAudio.currentTime = 0;
       } catch (e) {}
-      currentAudio = null;
+      state.currentAudio = null;
     }
   }
 
+  // ============================================
+  // UI HELPERS
+  // ============================================
+  function fmt(sec) {
+    sec = Math.max(0, Math.floor(sec));
+    const m = Math.floor(sec / 60).toString().padStart(2, '0');
+    const s = (sec % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  }
+
+  function updateStatus() {
+    const fired = state.signals.filter(s => s.fired).length;
+    const total = state.signals.length;
+    const remaining = total - fired;
+    refs.statusEl.innerHTML =
+      `${t('status-fired')} <strong>${fired}</strong> / ${total} · ${t('status-remaining')} <strong>${remaining}</strong>`;
+  }
+
+  function addHistoryItem(index, timeSec) {
+    const empty = refs.historyList.querySelector('.empty-history');
+    if (empty) empty.remove();
+
+    const item = document.createElement('div');
+    item.className = 'history-item';
+    item.innerHTML =
+      `<span class="num">${t('signal-prefix')}${index}</span>` +
+      `<span class="time">${fmt(timeSec)}</span>`;
+    refs.historyList.appendChild(item);
+    refs.historyList.scrollTop = refs.historyList.scrollHeight;
+  }
+
+  function clearHistory() {
+    refs.historyList.innerHTML = `<div class="empty-history">${t('history-empty')}</div>`;
+  }
+
+  // ============================================
+  // TIMER LOGIC
+  // ============================================
   function generateTimes(durationSec, count) {
     const availableSpan = durationSec - 2 * EDGE_MARGIN_SEC;
     const minNeeded = (count - 1) * MIN_INTERVAL_SEC;
@@ -180,136 +239,123 @@
     return times.map(v => Math.min(v + EDGE_MARGIN_SEC, durationSec - EDGE_MARGIN_SEC));
   }
 
-  function updateStatus() {
-    const fired = signals.filter(s => s.fired).length;
-    const total = signals.length;
-    const remaining = total - fired;
-    statusEl.innerHTML =
-      `${t('status-fired')} <strong>${fired}</strong> / ${total} · ${t('status-remaining')} <strong>${remaining}</strong>`;
-  }
-
-  function addHistoryItem(index, timeSec) {
-    const empty = historyList.querySelector('.empty-history');
-    if (empty) empty.remove();
-
-    const item = document.createElement('div');
-    item.className = 'history-item';
-    item.innerHTML =
-      `<span class="num">${t('signal-prefix')}${index}</span>` +
-      `<span class="time">${fmt(timeSec)}</span>`;
-    historyList.appendChild(item);
-    historyList.scrollTop = historyList.scrollHeight;
-  }
-
-  function clearHistory() {
-    historyList.innerHTML = `<div class="empty-history">${t('history-empty')}</div>`;
-  }
-
-  function fmt(sec) {
-    sec = Math.max(0, Math.floor(sec));
-    const m = Math.floor(sec / 60).toString().padStart(2, '0');
-    const s = (sec % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-  }
-
   function tick() {
-    if (!running) return;
+    if (!state.running) return;
     const now = performance.now();
-    const elapsed = accumulated + (now - startTime) / 1000;
+    const elapsed = state.accumulated + (now - state.startTime) / 1000;
 
-    for (const sig of signals) {
+    for (const sig of state.signals) {
       if (!sig.fired && !sig.awaitingConfirm && elapsed >= sig.time) {
         triggerSignal(sig, elapsed);
         break;
       }
     }
 
-    if (!modalOpen) {
-      const remaining = totalDurationSec - elapsed;
-      timeLeftEl.textContent = fmt(remaining);
-      const pct = Math.min(100, (elapsed / totalDurationSec) * 100);
-      progressEl.style.width = pct + '%';
+    if (!state.modalOpen) {
+      const remaining = state.totalDurationSec - elapsed;
+      refs.timeLeftEl.textContent = fmt(remaining);
+      const pct = Math.min(100, (elapsed / state.totalDurationSec) * 100);
+      refs.progressEl.style.width = pct + '%';
 
-      if (elapsed >= totalDurationSec) {
+      if (elapsed >= state.totalDurationSec) {
         finish();
         return;
       }
     }
 
-    rafId = requestAnimationFrame(tick);
+    state.rafId = requestAnimationFrame(tick);
   }
 
   function triggerSignal(sig, elapsed) {
     sig.fired = true;
     sig.awaitingConfirm = true;
 
-    accumulated += (performance.now() - startTime) / 1000;
-    running = false;
-    cancelAnimationFrame(rafId);
+    state.accumulated += (performance.now() - state.startTime) / 1000;
+    state.running = false;
+    cancelAnimationFrame(state.rafId);
 
     startBellLoop();
 
-    const index = signals.indexOf(sig) + 1;
-    modalTitle.textContent = `${t('signal-prefix')}${index}`;
-    modalTime.textContent = fmt(sig.time);
-    modal.classList.add('active');
-    modalOpen = true;
+    const index = state.signals.indexOf(sig) + 1;
+    refs.modalTitle.textContent = `${t('signal-prefix')}${index}`;
+    refs.modalTime.textContent = fmt(sig.time);
+    refs.modal.classList.add('active');
+    state.modalOpen = true;
 
     updateStatus();
   }
 
-  modalConfirm.addEventListener('click', () => {
-    stopBellLoop();
-    modal.classList.remove('active');
-    modalOpen = false;
+  function finish() {
+    state.running = false;
+    state.paused = false;
+    cancelAnimationFrame(state.rafId);
+    refs.timeLeftEl.textContent = '00:00';
+    refs.progressEl.style.width = '100%';
+    refs.statusEl.innerHTML = t('status-finished');
+    refs.pauseBtn.disabled = true;
+    refs.pauseBtn.textContent = t('pause');
+    refs.startBtn.disabled = false;
+    refs.resetBtn.disabled = false;
+    refs.durationInput.disabled = false;
+    refs.countInput.disabled = false;
 
-    const sig = signals.find(s => s.awaitingConfirm);
+    playBellOnce();
+  }
+
+  function resetState() {
+    state.signals = [];
+    state.totalDurationSec = 0;
+    state.startTime = 0;
+    state.accumulated = 0;
+    state.running = false;
+    state.paused = false;
+    state.modalOpen = false;
+    state.rafId = null;
+    state.currentAudio = null;
+  }
+
+  // ============================================
+  // EVENT HANDLERS
+  // ============================================
+  document.querySelectorAll('.lang-option').forEach(btn => {
+    btn.addEventListener('click', () => applyLanguage(btn.dataset.lang));
+  });
+
+  refs.modalConfirm.addEventListener('click', () => {
+    stopBellLoop();
+    refs.modal.classList.remove('active');
+    state.modalOpen = false;
+
+    const sig = state.signals.find(s => s.awaitingConfirm);
     if (sig) {
       sig.awaitingConfirm = false;
-      const index = signals.indexOf(sig) + 1;
+      const index = state.signals.indexOf(sig) + 1;
       addHistoryItem(index, sig.time);
     }
 
-    const elapsed = accumulated;
-    if (elapsed < totalDurationSec) {
-      startTime = performance.now();
-      running = true;
+    const elapsed = state.accumulated;
+    if (elapsed < state.totalDurationSec) {
+      state.startTime = performance.now();
+      state.running = true;
       tick();
     } else {
       finish();
     }
   });
 
-  function finish() {
-    running = false;
-    paused = false;
-    cancelAnimationFrame(rafId);
-    timeLeftEl.textContent = '00:00';
-    progressEl.style.width = '100%';
-    statusEl.innerHTML = t('status-finished');
-    pauseBtn.disabled = true;
-    pauseBtn.textContent = t('pause');
-    startBtn.disabled = false;
-    resetBtn.disabled = false;
-    durationInput.disabled = false;
-    countInput.disabled = false;
-
-    playBellOnce();
-  }
-
-  startBtn.addEventListener('click', () => {
-    errorEl.textContent = '';
-    const durationMin = parseFloat(durationInput.value);
-    const countRaw = countInput.value.trim();
+  refs.startBtn.addEventListener('click', () => {
+    refs.errorEl.textContent = '';
+    const durationMin = parseFloat(refs.durationInput.value);
+    const countRaw = refs.countInput.value.trim();
     const count = parseInt(countRaw, 10);
 
     if (!durationMin || !isFinite(durationMin) || durationMin <= 0) {
-      errorEl.textContent = t('error-invalid-duration');
+      refs.errorEl.textContent = t('error-invalid-duration');
       return;
     }
 
     if (!countRaw || !/^\d+$/.test(countRaw) || count <= 0) {
-      errorEl.textContent = t('error-invalid-count');
+      refs.errorEl.textContent = t('error-invalid-count');
       return;
     }
 
@@ -319,81 +365,82 @@
     const minNeeded = (count - 1) * MIN_INTERVAL_SEC;
     if (availableSpan < minNeeded) {
       const minMinutes = Math.ceil((minNeeded + 2 * EDGE_MARGIN_SEC) / 60);
-      errorEl.textContent = t('error-too-small')(count, minMinutes);
+      refs.errorEl.textContent = t('error-too-small')(count, minMinutes);
       return;
     }
 
     try {
       const times = generateTimes(durationSec, count);
-      totalDurationSec = durationSec;
-      signals = [];
+      state.totalDurationSec = durationSec;
+      state.signals = [];
       for (let i = 0; i < count; i++) {
-        signals.push({ time: times[i], fired: false, awaitingConfirm: false });
+        state.signals.push({ time: times[i], fired: false, awaitingConfirm: false });
       }
 
-      accumulated = 0;
-      startTime = performance.now();
-      running = true;
-      paused = false;
-      modalOpen = false;
+      state.accumulated = 0;
+      state.startTime = performance.now();
+      state.running = true;
+      state.paused = false;
+      state.modalOpen = false;
 
-      durationInput.disabled = true;
-      countInput.disabled = true;
-      startBtn.disabled = true;
-      pauseBtn.disabled = false;
-      resetBtn.disabled = false;
+      refs.durationInput.disabled = true;
+      refs.countInput.disabled = true;
+      refs.startBtn.disabled = true;
+      refs.pauseBtn.disabled = false;
+      refs.resetBtn.disabled = false;
 
       clearHistory();
       updateStatus();
       tick();
     } catch (e) {
-      errorEl.textContent = e.message;
+      refs.errorEl.textContent = e.message;
     }
   });
 
-  pauseBtn.addEventListener('click', () => {
-    if (modalOpen) return;
-    if (!running && !paused) return;
-    if (running) {
-      accumulated += (performance.now() - startTime) / 1000;
-      running = false;
-      paused = true;
-      cancelAnimationFrame(rafId);
-      pauseBtn.textContent = t('resume');
-      statusEl.innerHTML += ` · <em>${t('status-paused')}</em>`;
-    } else if (paused) {
-      startTime = performance.now();
-      running = true;
-      paused = false;
-      pauseBtn.textContent = t('pause');
+  refs.pauseBtn.addEventListener('click', () => {
+    if (state.modalOpen) return;
+    if (!state.running && !state.paused) return;
+    if (state.running) {
+      state.accumulated += (performance.now() - state.startTime) / 1000;
+      state.running = false;
+      state.paused = true;
+      cancelAnimationFrame(state.rafId);
+      refs.pauseBtn.textContent = t('resume');
+      refs.statusEl.innerHTML += ` · <em>${t('status-paused')}</em>`;
+    } else if (state.paused) {
+      state.startTime = performance.now();
+      state.running = true;
+      state.paused = false;
+      refs.pauseBtn.textContent = t('pause');
       updateStatus();
       tick();
     }
   });
 
-  resetBtn.addEventListener('click', () => {
-    running = false;
-    paused = false;
-    modalOpen = false;
-    cancelAnimationFrame(rafId);
+  refs.resetBtn.addEventListener('click', () => {
+    state.running = false;
+    state.paused = false;
+    state.modalOpen = false;
+    cancelAnimationFrame(state.rafId);
     stopBellLoop();
-    modal.classList.remove('active');
-    accumulated = 0;
-    signals = [];
-    timeLeftEl.textContent = '00:00';
-    progressEl.style.width = '0%';
-    statusEl.textContent = t('status-default');
-    errorEl.textContent = '';
+    refs.modal.classList.remove('active');
+    resetState();
+    refs.timeLeftEl.textContent = '00:00';
+    refs.progressEl.style.width = '0%';
+    refs.statusEl.textContent = t('status-default');
+    refs.errorEl.textContent = '';
     clearHistory();
-    startBtn.disabled = false;
-    pauseBtn.disabled = true;
-    pauseBtn.textContent = t('pause');
-    resetBtn.disabled = true;
-    durationInput.disabled = false;
-    countInput.disabled = false;
+    refs.startBtn.disabled = false;
+    refs.pauseBtn.disabled = true;
+    refs.pauseBtn.textContent = t('pause');
+    refs.resetBtn.disabled = true;
+    refs.durationInput.disabled = false;
+    refs.countInput.disabled = false;
   });
 
-  // Инициализация
-  timeLeftEl.textContent = fmt(parseFloat(durationInput.value) * 60 || 0);
+  // ============================================
+  // INIT
+  // ============================================
+  refs.timeLeftEl.textContent = fmt(parseFloat(refs.durationInput.value) * 60 || 0);
   applyLanguage('ru');
 })();
