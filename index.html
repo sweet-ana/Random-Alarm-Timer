@@ -1,62 +1,64 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>Random Alarm Timer</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="app-container">
-
-  <!-- SETUP SCREEN -->
-  <div id="setup-screen" class="card main-card">
-    <h1>Random Alarm Timer</h1>
-
-    <label>
-      Duration (minutes)
-      <input id="duration" type="number" min="2" value="10">
-    </label>
-
-    <label>
-      Number of alarms
-      <input id="alarmCount" type="number" min="1" value="3">
-    </label>
-
-    <button id="startBtn" class="btn neon-btn">START</button>
-
-    <p class="hint">
-      Minimum gap between alarms is 1 minute.<br>
-    </p>
-  </div>
-
-  <!-- TIMER SCREEN -->
-  <div id="timer-screen" class="card main-card hidden">
-
-    <div class="timer-display" id="countdown">00:00</div>
-
-    <div class="alarms-left" id="alarmsLeft">Alarms left: 0</div>
-
-    <!-- MINI PLAYER INSIDE PANEL -->
-    <div id="miniPlayer" class="mini-player hidden">
-      <div class="pulse-text">
-        <span class="pulse"></span>
-        <span id="miniPlayerLabel">Alarm ringing…</span>
+  <div class="container">
+    <div class="header-section">
+      <h1>RANDOM ALARM TIMER</h1>
+      <div class="lang-switch">
+        <div class="lang-toggle">
+          <button class="lang-option active" data-lang="ru">RU</button>
+          <button class="lang-option" data-lang="en">EN</button>
+        </div>
       </div>
-      <button id="stopSoundBtn" class="icon-btn">✔</button>
     </div>
-    
-    <!-- FIRED ALARMS -->
-    <h3 id="firedHeader" class="fired-header hidden">Triggered Alarms</h3>
-    <div id="firedList" class="fired-list"></div>
 
-    <button id="stopTimerBtn" class="btn neon-btn stop">STOP</button>
+    <div class="card">
+      <div class="controls">
+        <label data-i18n="duration">Длительность (минуты)
+          <input type="number" id="duration" min="1" value="10">
+        </label>
+        <label data-i18n="count">Количество сигналов
+          <input type="number" id="count" min="1" value="5">
+        </label>
+        <div class="buttons">
+          <button id="start" class="primary" data-i18n="start">▶ Старт</button>
+          <button id="pause" class="secondary" disabled data-i18n="pause">⏸ Пауза</button>
+          <button id="reset" class="secondary" disabled data-i18n="reset">⟲ Сброс</button>
+        </div>
+      </div>
+      <div id="error" class="error"></div>
+    </div>
 
+    <div class="card">
+      <div class="timer-display">
+        <div id="time-left">00:00</div>
+        <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
+      </div>
+      <div class="status" id="status" data-i18n="status-default">Задайте параметры и нажмите «Старт»</div>
+
+      <div class="history">
+        <div class="history-title" data-i18n="history-title">История сигналов</div>
+        <div id="history-list">
+          <div class="empty-history" data-i18n="history-empty">Пока пусто</div>
+        </div>
+      </div>
+    </div>
   </div>
-</div>
 
-<script src="audio.js"></script>
-<script src="logic.js"></script>
-<script src="app.js"></script>
+  <div class="modal-overlay" id="modal">
+    <div class="modal-card">
+      <div class="modal-title" id="modal-title">Сигнал №1</div>
+      <div class="modal-sub" data-i18n="modal-sub">Время срабатывания</div>
+      <div class="modal-time" id="modal-time">00:00</div>
+      <button id="modal-confirm" class="primary" data-i18n="modal-confirm">Подтвердить</button>
+    </div>
+  </div>
+
+  <script src="script.js" defer></script>
 </body>
 </html>
