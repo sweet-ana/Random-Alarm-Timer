@@ -1,399 +1,441 @@
-(() => {
-  const $ = id => document.getElementById(id);
-  const durationInput = $('duration');
-  const countInput    = $('count');
-  const startBtn      = $('start');
-  const pauseBtn      = $('pause');
-  const resetBtn      = $('reset');
-  const timeLeftEl    = $('time-left');
-  const progressEl    = $('progress');
-  const statusEl      = $('status');
-  const errorEl       = $('error');
-  const modal         = $('modal');
-  const modalTitle    = $('modal-title');
-  const modalTime     = $('modal-time');
-  const modalConfirm  = $('modal-confirm');
-  const historyList   = $('history-list');
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
-  const MIN_INTERVAL_SEC = 60;
-  const EDGE_MARGIN_SEC  = 1;
+:root {
+  --pink: #ff1493;
+  --pink-soft: #ff69b4;
+  --cyan: #00e5ff;
+  --bg: #0a0612;
+  --bg-2: #140a22;
+  --text: #f5e6ff;
+  --muted: #9a8fb0;
+  --header-h: 2.6rem;
+}
 
-  let signals = [];
-  let totalDurationSec = 0;
-  let startTime = 0;
-  let accumulated = 0;
-  let running = false;
-  let paused = false;
-  let modalOpen = false;
-  let rafId = null;
-  let currentAudio = null;
-  let currentLang = 'ru';
+html, body {
+  height: 100%;
+  font-family: 'Segoe UI', Tahoma, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  overflow-x: hidden;
+}
 
-  const translations = {
-    ru: {
-      duration: 'Длительность (минуты)',
-      count: 'Количество сигналов',
-      start: '▶ Старт',
-      pause: '⏸ Пауза',
-      resume: '▶ Продолжить',
-      reset: '⟲ Сброс',
-      'status-default': 'Задайте параметры и нажмите «Старт»',
-      'history-title': 'История сигналов',
-      'history-empty': 'Пока пусто',
-      'modal-sub': 'Время срабатывания',
-      'modal-confirm': 'Подтвердить',
-      'signal-prefix': 'Сигнал №',
-      'status-fired': 'Сработало:',
-      'status-remaining': 'Осталось:',
-      'status-paused': 'на паузе',
-      'status-finished': '✨ Таймер завершён',
-      'error-invalid-duration': 'Введите корректную длительность (положительное число).',
-      'error-invalid-count': 'Введите корректное количество сигналов (целое число ≥ 1).',
-      'error-too-small': (count, minMin) => 
-        `Для ${count} сигналов нужно минимум ${minMin} мин (минимальный интервал — 1 мин).`
-    },
-    en: {
-      duration: 'Duration (minutes)',
-      count: 'Number of alarms',
-      start: '▶ Start',
-      pause: '⏸ Pause',
-      resume: '▶ Resume',
-      reset: '⟲ Reset',
-      'status-default': 'Set parameters and press "Start"',
-      'history-title': 'Alarms History',
-      'history-empty': 'Empty yet',
-      'modal-sub': 'Trigger time',
-      'modal-confirm': 'Confirm',
-      'signal-prefix': 'Alarm #',
-      'status-fired': 'Fired:',
-      'status-remaining': 'Remaining:',
-      'status-paused': 'paused',
-      'status-finished': '✨ Timer finished',
-      'error-invalid-duration': 'Please enter a valid duration (positive number).',
-      'error-invalid-count': 'Please enter a valid alarm count (integer ≥ 1).',
-      'error-too-small': (count, minMin) => 
-        `At least ${minMin} min needed for ${count} alarms (minimum interval — 1 min).`
-    }
-  };
+body::before {
+  content: '';
+  position: fixed;
+  inset: -50%;
+  background:
+    radial-gradient(circle at 20% 30%, rgba(255, 20, 147, 0.25), transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(0, 229, 255, 0.22), transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(255, 105, 180, 0.15), transparent 50%);
+  filter: blur(40px);
+  animation: flow 18s ease-in-out infinite alternate;
+  z-index: -1;
+}
 
-  function t(key) {
-    return translations[currentLang][key] || key;
-  }
+@keyframes flow {
+  0%   { transform: translate(0, 0) rotate(0deg); }
+  50%  { transform: translate(-5%, 3%) rotate(8deg); }
+  100% { transform: translate(3%, -4%) rotate(-6deg); }
+}
 
-  function applyLanguage(lang) {
-    currentLang = lang;
-    document.documentElement.lang = lang;
-    
-    document.querySelectorAll('[data-i18n]').forEach(el => {
-      const key = el.getAttribute('data-i18n');
-      if (el.tagName === 'LABEL') {
-        const input = el.querySelector('input');
-        el.textContent = t(key);
-        if (input) el.appendChild(input);
-      } else {
-        el.textContent = t(key);
-      }
-    });
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 40px 24px 60px;
+}
 
-    document.querySelectorAll('.lang-option').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.lang === lang);
-    });
+.header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+  padding: 0 12px;
+}
 
-    const emptyHistory = historyList.querySelector('.empty-history');
-    if (emptyHistory) {
-      emptyHistory.textContent = t('history-empty');
-    }
+h1 {
+  font-size: 2.2rem;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  background: linear-gradient(90deg, var(--pink), var(--cyan), var(--pink));
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shine 4s linear infinite;
+  margin: 0;
+  height: var(--header-h);
+  line-height: var(--header-h);
+}
 
-    if (!running && !paused) {
-      statusEl.textContent = t('status-default');
-    }
-    if (paused) {
-      pauseBtn.textContent = t('resume');
-    } else {
-      pauseBtn.textContent = t('pause');
-    }
+@keyframes shine {
+  to { background-position: 200% center; }
+}
 
-    const items = historyList.querySelectorAll('.history-item');
-    items.forEach((item, idx) => {
-      const numSpan = item.querySelector('.num');
-      if (numSpan) {
-        numSpan.textContent = `${t('signal-prefix')}${idx + 1}`;
-      }
-    });
-  }
+/* Переключатель языка — компактный */
+.lang-switch {
+  display: flex;
+}
 
-  document.querySelectorAll('.lang-option').forEach(btn => {
-    btn.addEventListener('click', () => applyLanguage(btn.dataset.lang));
-  });
+.lang-toggle {
+  display: flex;
+  align-items: center;
+  height: 2rem;
+  background: rgba(20, 10, 34, 0.7);
+  border-radius: 20px;
+  padding: 2px;
+  gap: 2px;
+  box-shadow:
+    inset 0 0 0 1.5px rgba(255, 20, 147, 0.6),
+    0 0 15px rgba(255, 20, 147, 0.12);
+  backdrop-filter: blur(10px);
+}
 
-  function playBellOnce() {
-    try {
-      const a = new Audio('bell.mp3');
-      a.volume = 0.8;
-      a.play().catch(() => {});
-    } catch (e) {}
-  }
+.lang-option {
+  height: 100%;
+  padding: 0 16px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 18px;
+  cursor: pointer;
+  transition: all 0.3s;
+  min-width: 50px;
+  text-transform: uppercase;
+}
 
-  function startBellLoop() {
-    stopBellLoop();
-    try {
-      currentAudio = new Audio('bell.mp3');
-      currentAudio.loop = true;
-      currentAudio.volume = 0.8;
-      currentAudio.play().catch(() => {});
-    } catch (e) {}
-  }
+.lang-option:hover:not(.active) {
+  color: var(--text);
+}
 
-  function stopBellLoop() {
-    if (currentAudio) {
-      try {
-        currentAudio.pause();
-        currentAudio.currentTime = 0;
-      } catch (e) {}
-      currentAudio = null;
-    }
-  }
+.lang-option.active {
+  background: var(--pink);
+  color: var(--text);
+  box-shadow: 0 0 10px rgba(255, 20, 147, 0.5);
+}
 
-  function generateTimes(durationSec, count) {
-    const availableSpan = durationSec - 2 * EDGE_MARGIN_SEC;
-    const minNeeded = (count - 1) * MIN_INTERVAL_SEC;
-    const freeTime = availableSpan - minNeeded;
+.card {
+  background: rgba(20, 10, 34, 0.7);
+  border: 1px solid rgba(255, 20, 147, 0.25);
+  border-radius: 18px;
+  padding: 24px;
+  backdrop-filter: blur(10px);
+  box-shadow:
+    0 0 30px rgba(255, 20, 147, 0.08),
+    inset 0 0 20px rgba(0, 229, 255, 0.04);
+  margin-bottom: 22px;
+}
 
-    const rands = [];
-    let sum = 0;
-    for (let i = 0; i < count + 1; i++) {
-      const r = Math.random() || 1e-9;
-      rands.push(r);
-      sum += r;
-    }
-    const parts = rands.map(r => (r / sum) * freeTime);
+.controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 18px;
+}
 
-    const times = [];
-    let acc = parts[0];
-    times.push(acc);
-    for (let i = 1; i < count; i++) {
-      acc += MIN_INTERVAL_SEC + parts[i];
-      times.push(acc);
-    }
+label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
 
-    times.sort((a, b) => a - b);
-    return times.map(v => Math.min(v + EDGE_MARGIN_SEC, durationSec - EDGE_MARGIN_SEC));
-  }
+input[type="number"] {
+  margin-top: 8px;
+  background: rgba(10, 6, 18, 0.8);
+  border: 1px solid rgba(255, 20, 147, 0.4);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: var(--text);
+  font-size: 1.1rem;
+  outline: none;
+  transition: all 0.25s;
+}
 
-  function updateStatus() {
-    const fired = signals.filter(s => s.fired).length;
-    const total = signals.length;
-    const remaining = total - fired;
-    statusEl.innerHTML =
-      `${t('status-fired')} <strong>${fired}</strong> / ${total} · ${t('status-remaining')} <strong>${remaining}</strong>`;
-  }
+input[type="number"]:focus {
+  border-color: var(--pink);
+  box-shadow:
+    0 0 12px rgba(255, 20, 147, 0.6),
+    0 0 24px rgba(255, 20, 147, 0.3);
+}
 
-  function addHistoryItem(index, timeSec) {
-    const empty = historyList.querySelector('.empty-history');
-    if (empty) empty.remove();
+input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
-    const item = document.createElement('div');
-    item.className = 'history-item';
-    item.innerHTML =
-      `<span class="num">${t('signal-prefix')}${index}</span>` +
-      `<span class="time">${fmt(timeSec)}</span>`;
-    historyList.appendChild(item);
-    historyList.scrollTop = historyList.scrollHeight;
-  }
+.buttons {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 8px;
+}
 
-  function clearHistory() {
-    historyList.innerHTML = `<div class="empty-history">${t('history-empty')}</div>`;
-  }
+/* Базовый стиль кнопок */
+button {
+  flex: 1;
+  min-width: 130px;
+  padding: 12px 20px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
 
-  function fmt(sec) {
-    sec = Math.max(0, Math.floor(sec));
-    const m = Math.floor(sec / 60).toString().padStart(2, '0');
-    const s = (sec % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-  }
+/* PRIMARY — filled hot pink с неоновым свечением */
+button.primary {
+  background: var(--pink);
+  color: var(--text);
+  box-shadow:
+    0 0 10px rgba(255, 20, 147, 0.5),
+    0 0 20px rgba(255, 20, 147, 0.3),
+    inset 0 0 10px rgba(255, 255, 255, 0.1);
+}
 
-  function tick() {
-    if (!running) return;
-    const now = performance.now();
-    const elapsed = accumulated + (now - startTime) / 1000;
+button.primary:hover:not(:disabled) {
+  background: var(--pink-soft);
+  box-shadow:
+    0 0 15px rgba(255, 20, 147, 0.7),
+    0 0 30px rgba(255, 20, 147, 0.5),
+    0 0 45px rgba(255, 20, 147, 0.3),
+    inset 0 0 20px rgba(255, 255, 255, 0.2);
+}
 
-    for (const sig of signals) {
-      if (!sig.fired && !sig.awaitingConfirm && elapsed >= sig.time) {
-        triggerSignal(sig, elapsed);
-        break;
-      }
-    }
+button.primary:disabled {
+  background: rgba(255, 20, 147, 0.25);
+  color: rgba(245, 230, 255, 0.5);
+  box-shadow: none;
+  cursor: not-allowed;
+}
 
-    if (!modalOpen) {
-      const remaining = totalDurationSec - elapsed;
-      timeLeftEl.textContent = fmt(remaining);
-      const pct = Math.min(100, (elapsed / totalDurationSec) * 100);
-      progressEl.style.width = pct + '%';
+/* SECONDARY — outline с неоновым свечением */
+button.secondary {
+  background: transparent;
+  color: var(--pink);
+  border: 1.5px solid var(--pink);
+  box-shadow:
+    0 0 8px rgba(255, 20, 147, 0.3),
+    inset 0 0 8px rgba(255, 20, 147, 0.05);
+}
 
-      if (elapsed >= totalDurationSec) {
-        finish();
-        return;
-      }
-    }
+button.secondary:hover:not(:disabled) {
+  background: rgba(255, 20, 147, 0.08);
+  color: var(--pink-soft);
+  box-shadow:
+    0 0 12px rgba(255, 20, 147, 0.5),
+    0 0 24px rgba(255, 20, 147, 0.3),
+    inset 0 0 12px rgba(255, 20, 147, 0.1);
+}
 
-    rafId = requestAnimationFrame(tick);
-  }
+button.secondary:disabled {
+  border-color: var(--muted);
+  color: var(--muted);
+  box-shadow: none;
+  cursor: not-allowed;
+}
 
-  function triggerSignal(sig, elapsed) {
-    sig.fired = true;
-    sig.awaitingConfirm = true;
+.timer-display {
+  text-align: center;
+  padding: 10px 0 4px;
+}
 
-    accumulated += (performance.now() - startTime) / 1000;
-    running = false;
-    cancelAnimationFrame(rafId);
+#time-left {
+  font-size: 3.6rem;
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 4px;
+  color: var(--text);
+  text-shadow: 0 0 20px rgba(255, 20, 147, 0.5);
+  margin-bottom: 14px;
+}
 
-    startBellLoop();
+.progress-bar {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  overflow: hidden;
+}
 
-    const index = signals.indexOf(sig) + 1;
-    modalTitle.textContent = `${t('signal-prefix')}${index}`;
-    modalTime.textContent = fmt(sig.time);
-    modal.classList.add('active');
-    modalOpen = true;
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--pink), var(--cyan));
+  border-radius: 4px;
+  box-shadow: 0 0 12px rgba(255, 20, 147, 0.6);
+  transition: width 0.3s linear;
+}
 
-    updateStatus();
-  }
+.status {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.95rem;
+  margin-top: 10px;
+  min-height: 1.4em;
+}
 
-  modalConfirm.addEventListener('click', () => {
-    stopBellLoop();
-    modal.classList.remove('active');
-    modalOpen = false;
+.status strong {
+  color: var(--pink-soft);
+  text-shadow: 0 0 8px rgba(255, 20, 147, 0.6);
+}
 
-    const sig = signals.find(s => s.awaitingConfirm);
-    if (sig) {
-      sig.awaitingConfirm = false;
-      const index = signals.indexOf(sig) + 1;
-      addHistoryItem(index, sig.time);
-    }
+.history {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 20, 147, 0.2);
+}
 
-    const elapsed = accumulated;
-    if (elapsed < totalDurationSec) {
-      startTime = performance.now();
-      running = true;
-      tick();
-    } else {
-      finish();
-    }
-  });
+.history-title {
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 12px;
+}
 
-  function finish() {
-    running = false;
-    paused = false;
-    cancelAnimationFrame(rafId);
-    timeLeftEl.textContent = '00:00';
-    progressEl.style.width = '100%';
-    statusEl.innerHTML = t('status-finished');
-    pauseBtn.disabled = true;
-    pauseBtn.textContent = t('pause');
-    startBtn.disabled = false;
-    resetBtn.disabled = false;
-    durationInput.disabled = false;
-    countInput.disabled = false;
+#history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
 
-    playBellOnce();
-  }
+#history-list::-webkit-scrollbar { width: 6px; }
+#history-list::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); border-radius: 3px; }
+#history-list::-webkit-scrollbar-thumb { background: var(--pink); border-radius: 3px; }
 
-  startBtn.addEventListener('click', () => {
-    errorEl.textContent = '';
-    const durationMin = parseFloat(durationInput.value);
-    const countRaw = countInput.value.trim();
-    const count = parseInt(countRaw, 10);
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: rgba(255, 20, 147, 0.06);
+  border: 1px solid rgba(255, 20, 147, 0.25);
+  border-radius: 10px;
+  font-size: 0.95rem;
+  animation: slideIn 0.4s ease;
+}
 
-    if (!durationMin || !isFinite(durationMin) || durationMin <= 0) {
-      errorEl.textContent = t('error-invalid-duration');
-      return;
-    }
+.history-item .num {
+  color: var(--pink-soft);
+  font-weight: 600;
+  text-shadow: 0 0 8px rgba(255, 20, 147, 0.5);
+}
 
-    if (!countRaw || !/^\d+$/.test(countRaw) || count <= 0) {
-      errorEl.textContent = t('error-invalid-count');
-      return;
-    }
+.history-item .time {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
 
-    const durationSec = durationMin * 60;
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
 
-    const availableSpan = durationSec - 2 * EDGE_MARGIN_SEC;
-    const minNeeded = (count - 1) * MIN_INTERVAL_SEC;
-    if (availableSpan < minNeeded) {
-      const minMinutes = Math.ceil((minNeeded + 2 * EDGE_MARGIN_SEC) / 60);
-      errorEl.textContent = t('error-too-small')(count, minMinutes);
-      return;
-    }
+.empty-history {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 10px;
+}
 
-    try {
-      const times = generateTimes(durationSec, count);
-      totalDurationSec = durationSec;
-      signals = [];
-      for (let i = 0; i < count; i++) {
-        signals.push({ time: times[i], fired: false, awaitingConfirm: false });
-      }
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 6, 18, 0.85);
+  backdrop-filter: blur(8px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  animation: fadeIn 0.3s ease;
+}
 
-      accumulated = 0;
-      startTime = performance.now();
-      running = true;
-      paused = false;
-      modalOpen = false;
+.modal-overlay.active { display: flex; }
 
-      durationInput.disabled = true;
-      countInput.disabled = true;
-      startBtn.disabled = true;
-      pauseBtn.disabled = false;
-      resetBtn.disabled = false;
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
 
-      clearHistory();
-      updateStatus();
-      tick();
-    } catch (e) {
-      errorEl.textContent = e.message;
-    }
-  });
+.modal-card {
+  background: linear-gradient(135deg, #1a0a2e, #0f0618);
+  border: 2px solid var(--pink);
+  border-radius: 20px;
+  padding: 40px 50px;
+  text-align: center;
+  box-shadow:
+    0 0 40px rgba(255, 20, 147, 0.6),
+    0 0 80px rgba(255, 20, 147, 0.3),
+    inset 0 0 30px rgba(0, 229, 255, 0.08);
+  animation: pulse 1.5s ease-in-out infinite;
+  max-width: 90%;
+}
 
-  pauseBtn.addEventListener('click', () => {
-    if (modalOpen) return;
-    if (!running && !paused) return;
-    if (running) {
-      accumulated += (performance.now() - startTime) / 1000;
-      running = false;
-      paused = true;
-      cancelAnimationFrame(rafId);
-      pauseBtn.textContent = t('resume');
-      statusEl.innerHTML += ` · <em>${t('status-paused')}</em>`;
-    } else if (paused) {
-      startTime = performance.now();
-      running = true;
-      paused = false;
-      pauseBtn.textContent = t('pause');
-      updateStatus();
-      tick();
-    }
-  });
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 40px rgba(255, 20, 147, 0.6), 0 0 80px rgba(255, 20, 147, 0.3); }
+  50%      { box-shadow: 0 0 60px rgba(255, 20, 147, 0.9), 0 0 120px rgba(0, 229, 255, 0.4); }
+}
 
-  resetBtn.addEventListener('click', () => {
-    running = false;
-    paused = false;
-    modalOpen = false;
-    cancelAnimationFrame(rafId);
-    stopBellLoop();
-    modal.classList.remove('active');
-    accumulated = 0;
-    signals = [];
-    timeLeftEl.textContent = '00:00';
-    progressEl.style.width = '0%';
-    statusEl.textContent = t('status-default');
-    errorEl.textContent = '';
-    clearHistory();
-    startBtn.disabled = false;
-    pauseBtn.disabled = true;
-    pauseBtn.textContent = t('pause');
-    resetBtn.disabled = true;
-    durationInput.disabled = false;
-    countInput.disabled = false;
-  });
+.modal-title {
+  font-size: 1.8rem;
+  margin-bottom: 8px;
+  color: var(--pink-soft);
+  letter-spacing: 2px;
+}
 
-  // Инициализация
-  timeLeftEl.textContent = fmt(parseFloat(durationInput.value) * 60 || 0);
-  applyLanguage('ru');
-})();
+.modal-sub {
+  color: var(--muted);
+  font-size: 0.95rem;
+  margin-bottom: 24px;
+}
+
+.modal-time {
+  font-size: 2.4rem;
+  font-weight: 300;
+  color: var(--text);
+  margin-bottom: 24px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 3px;
+}
+
+#modal-confirm {
+  min-width: 200px;
+  padding: 14px 28px;
+  font-size: 1rem;
+}
+
+.error {
+  color: #ff6b9d;
+  text-align: center;
+  padding: 10px;
+  font-size: 0.9rem;
+  min-height: 1.4em;
+}
+
+@media (max-width: 500px) {
+  :root { --header-h: 1.8rem; }
+  h1 { font-size: 1.4rem; letter-spacing: 2px; }
+  #time-left { font-size: 2.6rem; }
+  .controls { grid-template-columns: 1fr; }
+  .modal-card { padding: 30px 24px; }
+  .modal-title { font-size: 1.4rem; }
+  .modal-time { font-size: 1.8rem; }
+  .lang-option { padding: 0 12px; min-width: 40px; font-size: 0.7rem; }
+  .lang-toggle { height: 1.6rem; }
+  .header-section { flex-direction: column; gap: 16px; padding: 0; }
+}
