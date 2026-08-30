@@ -1,189 +1,399 @@
-:root {
-  --bg: #0c0c0f;
-  --panel: #11131a;
-  --pink: #ff2fa6;
-  --pink-soft: #ff6fc8;
-  --pink-soft-tranparent: rgba(255, 111, 200, 0.8);
-  --text-light: #f2f2f7;
-  --dark: #0c0c12;
-}
+(() => {
+  const $ = id => document.getElementById(id);
+  const durationInput = $('duration');
+  const countInput    = $('count');
+  const startBtn      = $('start');
+  const pauseBtn      = $('pause');
+  const resetBtn      = $('reset');
+  const timeLeftEl    = $('time-left');
+  const progressEl    = $('progress');
+  const statusEl      = $('status');
+  const errorEl       = $('error');
+  const modal         = $('modal');
+  const modalTitle    = $('modal-title');
+  const modalTime     = $('modal-time');
+  const modalConfirm  = $('modal-confirm');
+  const historyList   = $('history-list');
 
-body {
-  background: radial-gradient(circle at 50% 20%, #111 0%, #000 60%);
-  color: var(--text-light);
-  font-family: system-ui, -apple-system, Segoe UI, Roboto;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 16px;
-  min-height: 100vh;
-}
+  const MIN_INTERVAL_SEC = 60;
+  const EDGE_MARGIN_SEC  = 1;
 
-.app-container {
-  max-width: 480px;
-  width: 100%;
-}
+  let signals = [];
+  let totalDurationSec = 0;
+  let startTime = 0;
+  let accumulated = 0;
+  let running = false;
+  let paused = false;
+  let modalOpen = false;
+  let rafId = null;
+  let currentAudio = null;
+  let currentLang = 'ru';
 
-/* MAIN CARD WITH NEON PULSE */
-.main-card {
-  background: var(--panel);
-  border-radius: 18px;
-  padding: 20px;
-  border: 2px solid var(--pink);
-  box-shadow: 0 0 15px rgba(255,47,166,0.2);
-  animation: neonPulse 4s ease-in-out infinite;
-}
+  const translations = {
+    ru: {
+      duration: 'Длительность (минуты)',
+      count: 'Количество сигналов',
+      start: '▶ Старт',
+      pause: '⏸ Пауза',
+      resume: '▶ Продолжить',
+      reset: '⟲ Сброс',
+      'status-default': 'Задайте параметры и нажмите «Старт»',
+      'history-title': 'История сигналов',
+      'history-empty': 'Пока пусто',
+      'modal-sub': 'Время срабатывания',
+      'modal-confirm': 'Подтвердить',
+      'signal-prefix': 'Сигнал №',
+      'status-fired': 'Сработало:',
+      'status-remaining': 'Осталось:',
+      'status-paused': 'на паузе',
+      'status-finished': '✨ Таймер завершён',
+      'error-invalid-duration': 'Введите корректную длительность (положительное число).',
+      'error-invalid-count': 'Введите корректное количество сигналов (целое число ≥ 1).',
+      'error-too-small': (count, minMin) => 
+        `Для ${count} сигналов нужно минимум ${minMin} мин (минимальный интервал — 1 мин).`
+    },
+    en: {
+      duration: 'Duration (minutes)',
+      count: 'Number of alarms',
+      start: '▶ Start',
+      pause: '⏸ Pause',
+      resume: '▶ Resume',
+      reset: '⟲ Reset',
+      'status-default': 'Set parameters and press "Start"',
+      'history-title': 'Alarms History',
+      'history-empty': 'Empty yet',
+      'modal-sub': 'Trigger time',
+      'modal-confirm': 'Confirm',
+      'signal-prefix': 'Alarm #',
+      'status-fired': 'Fired:',
+      'status-remaining': 'Remaining:',
+      'status-paused': 'paused',
+      'status-finished': '✨ Timer finished',
+      'error-invalid-duration': 'Please enter a valid duration (positive number).',
+      'error-invalid-count': 'Please enter a valid alarm count (integer ≥ 1).',
+      'error-too-small': (count, minMin) => 
+        `At least ${minMin} min needed for ${count} alarms (minimum interval — 1 min).`
+    }
+  };
 
-@keyframes neonPulse {
-  0%,100% { box-shadow: 0 0 12px rgba(255,47,166,0.25); }
-  50% { box-shadow: 0 0 20px rgba(255,47,166,0.4); }
-}
-
-h1 {
-  text-align: center;
-  color: var(--pink);
-  margin-bottom: 12px;
-}
-
-label {
-  display: block;
-  margin: 12px 0;
-  font-size: 14px;
-}
-
-input {
-  width: 100%;
-  padding: 10px;
-  border-radius: 10px;
-  border: none;
-  background: #1a1d27;
-  color: white;
-  margin-top: 6px;
-  box-sizing: border-box;
-}
-
-/* TIMER */
-.timer-display {
-  font-size: clamp(50px, 12vw, 70px);
-  text-align: center;
-  margin: 12px 0;
-  color: var(--text-light);
-  letter-spacing: 2px;
-}
-
-/* ALARMS LEFT (bold + pink) */
-.alarms-left {
-  text-align: center;
-  color: var(--pink);
-  font-size: 16px;
-  margin-bottom: 12px;
-  font-weight: bold;
-}
-
-/* BUTTONS */
-.btn {
-  width: 100%;
-  padding: 12px;
-  border-radius: 12px;
-  border: 2px solid var(--pink);
-  color: var(--dark);
-  background: var(--pink);
-  font-size: 16px;
-  font-weight: bold;
-  margin-top: 14px;
-  cursor: pointer;
-  transition: all .2s ease;
-}
-
-.btn:hover {
-  background:var(--pink-soft-tranparent);
-  border-color: white;
-  color: white;
-  box-shadow: none;
-}
-
-/* MINI PLAYER PANEL */
-.mini-player {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #151726;
-  border-radius: 14px;
-  padding: 10px 14px;
-  border: 3px solid rgba(255,47,166,0.3);
-  margin-bottom: 12px;
-}
-
-.pulse-text {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* MINI PLAYER BUTTON*/
-.icon-btn {
-  background: var(--pink);
-  border: 2px solid var(--pink);
-  color: var(--dark);
-  font-weight: 900;
-  padding: 6px 12px;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all .2s ease;
-}
-
-.icon-btn:hover {
-  background: var(--pink-soft-tranparent);
-  color: white;
-  border-color: white;
-}
-
-/* TRIGGERED ALARMS TITLE */
-.fired-header {
-  color: white;
-  margin-bottom: 6px;
-  font-size: 16px;
-}
-
-/* TRIGGERED LIST */
-.fired-list {
-  font-size: 14px;
-  margin-bottom: 12px;
-}
-
-/* PULSE DOT */
-.pulse {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--pink);
-  animation: pulseAnim 1.2s infinite;
-}
-
-@keyframes pulseAnim {
-  0%, 100% { transform: scale(.9); opacity:.7; }
-  50% { transform: scale(1.4); opacity:1; }
-}
-
-/* ELEMENTS TO HIDE */
-.hidden {
-  display: none;
-}
-
-.hint {
-  font-size: 12px;
-  opacity: .7;
-  margin-top: 10px;
-  text-align: center;
-}
-
-/* RESPONSIVE */
-@media(max-width:480px){
-  .card {
-    padding: 16px;
-    border-radius: 14px;
+  function t(key) {
+    return translations[currentLang][key] || key;
   }
 
-  .btn { font-size: 15px; }
-  .timer-display { font-size: clamp(45px,12vw,65px); }
-}
+  function applyLanguage(lang) {
+    currentLang = lang;
+    document.documentElement.lang = lang;
+    
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      if (el.tagName === 'LABEL') {
+        const input = el.querySelector('input');
+        el.textContent = t(key);
+        if (input) el.appendChild(input);
+      } else {
+        el.textContent = t(key);
+      }
+    });
+
+    document.querySelectorAll('.lang-option').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.lang === lang);
+    });
+
+    const emptyHistory = historyList.querySelector('.empty-history');
+    if (emptyHistory) {
+      emptyHistory.textContent = t('history-empty');
+    }
+
+    if (!running && !paused) {
+      statusEl.textContent = t('status-default');
+    }
+    if (paused) {
+      pauseBtn.textContent = t('resume');
+    } else {
+      pauseBtn.textContent = t('pause');
+    }
+
+    const items = historyList.querySelectorAll('.history-item');
+    items.forEach((item, idx) => {
+      const numSpan = item.querySelector('.num');
+      if (numSpan) {
+        numSpan.textContent = `${t('signal-prefix')}${idx + 1}`;
+      }
+    });
+  }
+
+  document.querySelectorAll('.lang-option').forEach(btn => {
+    btn.addEventListener('click', () => applyLanguage(btn.dataset.lang));
+  });
+
+  function playBellOnce() {
+    try {
+      const a = new Audio('bell.mp3');
+      a.volume = 0.8;
+      a.play().catch(() => {});
+    } catch (e) {}
+  }
+
+  function startBellLoop() {
+    stopBellLoop();
+    try {
+      currentAudio = new Audio('bell.mp3');
+      currentAudio.loop = true;
+      currentAudio.volume = 0.8;
+      currentAudio.play().catch(() => {});
+    } catch (e) {}
+  }
+
+  function stopBellLoop() {
+    if (currentAudio) {
+      try {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+      } catch (e) {}
+      currentAudio = null;
+    }
+  }
+
+  function generateTimes(durationSec, count) {
+    const availableSpan = durationSec - 2 * EDGE_MARGIN_SEC;
+    const minNeeded = (count - 1) * MIN_INTERVAL_SEC;
+    const freeTime = availableSpan - minNeeded;
+
+    const rands = [];
+    let sum = 0;
+    for (let i = 0; i < count + 1; i++) {
+      const r = Math.random() || 1e-9;
+      rands.push(r);
+      sum += r;
+    }
+    const parts = rands.map(r => (r / sum) * freeTime);
+
+    const times = [];
+    let acc = parts[0];
+    times.push(acc);
+    for (let i = 1; i < count; i++) {
+      acc += MIN_INTERVAL_SEC + parts[i];
+      times.push(acc);
+    }
+
+    times.sort((a, b) => a - b);
+    return times.map(v => Math.min(v + EDGE_MARGIN_SEC, durationSec - EDGE_MARGIN_SEC));
+  }
+
+  function updateStatus() {
+    const fired = signals.filter(s => s.fired).length;
+    const total = signals.length;
+    const remaining = total - fired;
+    statusEl.innerHTML =
+      `${t('status-fired')} <strong>${fired}</strong> / ${total} · ${t('status-remaining')} <strong>${remaining}</strong>`;
+  }
+
+  function addHistoryItem(index, timeSec) {
+    const empty = historyList.querySelector('.empty-history');
+    if (empty) empty.remove();
+
+    const item = document.createElement('div');
+    item.className = 'history-item';
+    item.innerHTML =
+      `<span class="num">${t('signal-prefix')}${index}</span>` +
+      `<span class="time">${fmt(timeSec)}</span>`;
+    historyList.appendChild(item);
+    historyList.scrollTop = historyList.scrollHeight;
+  }
+
+  function clearHistory() {
+    historyList.innerHTML = `<div class="empty-history">${t('history-empty')}</div>`;
+  }
+
+  function fmt(sec) {
+    sec = Math.max(0, Math.floor(sec));
+    const m = Math.floor(sec / 60).toString().padStart(2, '0');
+    const s = (sec % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  }
+
+  function tick() {
+    if (!running) return;
+    const now = performance.now();
+    const elapsed = accumulated + (now - startTime) / 1000;
+
+    for (const sig of signals) {
+      if (!sig.fired && !sig.awaitingConfirm && elapsed >= sig.time) {
+        triggerSignal(sig, elapsed);
+        break;
+      }
+    }
+
+    if (!modalOpen) {
+      const remaining = totalDurationSec - elapsed;
+      timeLeftEl.textContent = fmt(remaining);
+      const pct = Math.min(100, (elapsed / totalDurationSec) * 100);
+      progressEl.style.width = pct + '%';
+
+      if (elapsed >= totalDurationSec) {
+        finish();
+        return;
+      }
+    }
+
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function triggerSignal(sig, elapsed) {
+    sig.fired = true;
+    sig.awaitingConfirm = true;
+
+    accumulated += (performance.now() - startTime) / 1000;
+    running = false;
+    cancelAnimationFrame(rafId);
+
+    startBellLoop();
+
+    const index = signals.indexOf(sig) + 1;
+    modalTitle.textContent = `${t('signal-prefix')}${index}`;
+    modalTime.textContent = fmt(sig.time);
+    modal.classList.add('active');
+    modalOpen = true;
+
+    updateStatus();
+  }
+
+  modalConfirm.addEventListener('click', () => {
+    stopBellLoop();
+    modal.classList.remove('active');
+    modalOpen = false;
+
+    const sig = signals.find(s => s.awaitingConfirm);
+    if (sig) {
+      sig.awaitingConfirm = false;
+      const index = signals.indexOf(sig) + 1;
+      addHistoryItem(index, sig.time);
+    }
+
+    const elapsed = accumulated;
+    if (elapsed < totalDurationSec) {
+      startTime = performance.now();
+      running = true;
+      tick();
+    } else {
+      finish();
+    }
+  });
+
+  function finish() {
+    running = false;
+    paused = false;
+    cancelAnimationFrame(rafId);
+    timeLeftEl.textContent = '00:00';
+    progressEl.style.width = '100%';
+    statusEl.innerHTML = t('status-finished');
+    pauseBtn.disabled = true;
+    pauseBtn.textContent = t('pause');
+    startBtn.disabled = false;
+    resetBtn.disabled = false;
+    durationInput.disabled = false;
+    countInput.disabled = false;
+
+    playBellOnce();
+  }
+
+  startBtn.addEventListener('click', () => {
+    errorEl.textContent = '';
+    const durationMin = parseFloat(durationInput.value);
+    const countRaw = countInput.value.trim();
+    const count = parseInt(countRaw, 10);
+
+    if (!durationMin || !isFinite(durationMin) || durationMin <= 0) {
+      errorEl.textContent = t('error-invalid-duration');
+      return;
+    }
+
+    if (!countRaw || !/^\d+$/.test(countRaw) || count <= 0) {
+      errorEl.textContent = t('error-invalid-count');
+      return;
+    }
+
+    const durationSec = durationMin * 60;
+
+    const availableSpan = durationSec - 2 * EDGE_MARGIN_SEC;
+    const minNeeded = (count - 1) * MIN_INTERVAL_SEC;
+    if (availableSpan < minNeeded) {
+      const minMinutes = Math.ceil((minNeeded + 2 * EDGE_MARGIN_SEC) / 60);
+      errorEl.textContent = t('error-too-small')(count, minMinutes);
+      return;
+    }
+
+    try {
+      const times = generateTimes(durationSec, count);
+      totalDurationSec = durationSec;
+      signals = [];
+      for (let i = 0; i < count; i++) {
+        signals.push({ time: times[i], fired: false, awaitingConfirm: false });
+      }
+
+      accumulated = 0;
+      startTime = performance.now();
+      running = true;
+      paused = false;
+      modalOpen = false;
+
+      durationInput.disabled = true;
+      countInput.disabled = true;
+      startBtn.disabled = true;
+      pauseBtn.disabled = false;
+      resetBtn.disabled = false;
+
+      clearHistory();
+      updateStatus();
+      tick();
+    } catch (e) {
+      errorEl.textContent = e.message;
+    }
+  });
+
+  pauseBtn.addEventListener('click', () => {
+    if (modalOpen) return;
+    if (!running && !paused) return;
+    if (running) {
+      accumulated += (performance.now() - startTime) / 1000;
+      running = false;
+      paused = true;
+      cancelAnimationFrame(rafId);
+      pauseBtn.textContent = t('resume');
+      statusEl.innerHTML += ` · <em>${t('status-paused')}</em>`;
+    } else if (paused) {
+      startTime = performance.now();
+      running = true;
+      paused = false;
+      pauseBtn.textContent = t('pause');
+      updateStatus();
+      tick();
+    }
+  });
+
+  resetBtn.addEventListener('click', () => {
+    running = false;
+    paused = false;
+    modalOpen = false;
+    cancelAnimationFrame(rafId);
+    stopBellLoop();
+    modal.classList.remove('active');
+    accumulated = 0;
+    signals = [];
+    timeLeftEl.textContent = '00:00';
+    progressEl.style.width = '0%';
+    statusEl.textContent = t('status-default');
+    errorEl.textContent = '';
+    clearHistory();
+    startBtn.disabled = false;
+    pauseBtn.disabled = true;
+    pauseBtn.textContent = t('pause');
+    resetBtn.disabled = true;
+    durationInput.disabled = false;
+    countInput.disabled = false;
+  });
+
+  // Инициализация
+  timeLeftEl.textContent = fmt(parseFloat(durationInput.value) * 60 || 0);
+  applyLanguage('ru');
+})();
